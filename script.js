@@ -568,6 +568,7 @@ function getWebsiteTarget(command) {
     youtube: "https://www.youtube.com",
     google: "https://www.google.com",
     github: "https://github.com",
+    digitec: "https://www.digitec.ch/de",
     naturwissenschaften: "https://matte0-sec.github.io/Naturwissenschaften/",
     cyberworld: "https://matte0-sec.github.io/Cybeworld/",
     spotify: "https://open.spotify.com",
