@@ -43,11 +43,10 @@ let notes = JSON.parse(localStorage.getItem("jarvis-notes") || "[]");
 let appointments = JSON.parse(localStorage.getItem("jarvis-appointments") || "[]");
 let alternateTheme = false;
 let germanVoice;
-let wakeStream;
-let wakeAudioContext;
-let wakeAnimationFrame;
-let clapTimes = [];
-let lastClapTime = 0;
+let wakeRecognition;
+let wakeRestartTimer;
+let wakeRecognitionActive = false;
+let wakeRecognitionBlocked = false;
 let interfaceMode = "voice";
 let preferences = JSON.parse(localStorage.getItem("jarvis-preferences") || "{}");
 let ghostProtocol = sessionStorage.getItem("jarvis-ghost-protocol") === "true";
@@ -85,12 +84,13 @@ function withJarvisTone(message, kind = "neutral") {
 }
 
 function stopWakeListener() {
-  cancelAnimationFrame(wakeAnimationFrame);
-  wakeStream?.getTracks().forEach((track) => track.stop());
-  wakeStream = undefined;
-  wakeAudioContext?.close();
-  wakeAudioContext = undefined;
-  clapTimes = [];
+  wakeRecognitionActive = false;
+  clearTimeout(wakeRestartTimer);
+  const recognition = wakeRecognition;
+  wakeRecognition = undefined;
+  try {
+    recognition?.stop();
+  } catch {}
 }
 
 function activateJarvis() {
@@ -144,66 +144,65 @@ function isGhostProtocolCommand(command) {
     || (/^(öffne|starte)\b/.test(normalized) && (Boolean(getWebsiteTarget(command)) || /(dateien|explorer|ordner)/.test(normalized)));
 }
 
-function listenForClaps(analyser, samples) {
-  analyser.getByteTimeDomainData(samples);
-  let squaredTotal = 0;
-  let peak = 0;
-  for (const sample of samples) {
-    const offset = Math.abs(sample - 128);
-    squaredTotal += offset ** 2;
-    peak = Math.max(peak, offset);
-  }
-  const volume = Math.sqrt(squaredTotal / samples.length);
-  const now = performance.now();
-
-  if ((volume > 8 || peak > 55) && now - lastClapTime > 130) {
-    lastClapTime = now;
-    clapTimes = [...clapTimes, now].filter((time) => now - time < 1200);
-    if (clapTimes.length >= 2) {
-      activateJarvis();
-      return;
-    }
-  }
-  wakeAnimationFrame = requestAnimationFrame(() => listenForClaps(analyser, samples));
-}
-
-async function startWakeListener() {
-  if (ghostProtocol || wakeStream) return;
-  if (!navigator.mediaDevices?.getUserMedia) {
-    wakeStatus.textContent = "Mikrofon wird von diesem Browser nicht unterstützt";
-    wakeRetry.hidden = false;
+function startWakeListener() {
+  if (ghostProtocol || wakeRecognitionActive) return;
+  const WakeRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!WakeRecognition) {
+    wakeStatus.textContent = "Sprachstart wird von diesem Browser nicht unterstützt";
+    wakeRetry.hidden = true;
     return;
   }
 
+  wakeRecognitionBlocked = false;
   wakeRetry.hidden = true;
-  wakeRetry.disabled = true;
   wakeStatus.textContent = "Mikrofon wird aktiviert ...";
-  try {
-    wakeStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
-      video: false,
-    });
-    wakeAudioContext = new AudioContext();
-    const source = wakeAudioContext.createMediaStreamSource(wakeStream);
-    const analyser = wakeAudioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    source.connect(analyser);
-    await wakeAudioContext.resume();
-    if (wakeAudioContext.state !== "running") {
-      stopWakeListener();
-      wakeStatus.textContent = "Einmal klicken, um das Mikrofon zu aktivieren";
-      wakeRetry.hidden = false;
-      wakeRetry.disabled = false;
-      return;
-    }
-    wakeStatus.textContent = "Warte auf zwei Klatscher";
+  const recognition = new WakeRecognition();
+  wakeRecognition = recognition;
+  recognition.lang = "de-DE";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.addEventListener("start", () => {
+    wakeRecognitionActive = true;
+    wakeStatus.textContent = "Sag „Jarvis aufwachen“";
     wakeScreen.classList.add("listening");
-    listenForClaps(analyser, new Uint8Array(analyser.fftSize));
+  });
+  recognition.addEventListener("result", (event) => {
+    const transcript = Array.from(event.results)
+      .slice(event.resultIndex)
+      .map((result) => result[0].transcript)
+      .join(" ")
+      .toLocaleLowerCase("de-DE");
+    if (/\bjarvis\b/.test(transcript) && /\b(?:aufwachen|wach auf|wache auf)\b/.test(transcript)) {
+      activateJarvis();
+    }
+  });
+  recognition.addEventListener("error", (event) => {
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
+      wakeRecognitionActive = false;
+      wakeRecognitionBlocked = true;
+      wakeScreen.classList.remove("listening");
+      wakeStatus.textContent = "Mikrofonfreigabe erforderlich";
+      wakeRetry.hidden = false;
+    }
+  });
+  recognition.addEventListener("end", () => {
+    if (wakeRecognition !== recognition) return;
+    wakeRecognitionActive = false;
+    if (!wakeRecognitionBlocked && !ghostProtocol && !wakeScreen.classList.contains("awake")) {
+      wakeRestartTimer = window.setTimeout(startWakeListener, 700);
+    }
+  });
+
+  try {
+    recognition.start();
   } catch {
-    stopWakeListener();
-    wakeStatus.textContent = "Mikrofonberechtigung erforderlich";
+    wakeRecognitionActive = false;
+    wakeRecognitionBlocked = true;
+    wakeScreen.classList.remove("listening");
+    wakeStatus.textContent = "Klicken, um das Mikrofon zu aktivieren";
     wakeRetry.hidden = false;
-    wakeRetry.disabled = false;
   }
 }
 
@@ -993,7 +992,6 @@ wakeRetry.addEventListener("click", (event) => {
   startWakeListener();
 });
 window.addEventListener("load", startWakeListener, { once: true });
-window.addEventListener("beforeunload", stopWakeListener);
 
 if (ghostProtocol) {
   setGhostProtocol(true);
