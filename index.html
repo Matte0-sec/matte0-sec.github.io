@@ -68,7 +68,7 @@
         </section>
 
         <section class="omega-mission" aria-label="Omega Mission Control">
-            <div class="omega-mission-heading"><span>◉</span><div><p>OMEGA MISSION CONTROL</p><small>PLANEN · KOORDINIEREN · AUSFÜHREN · OPTIMIEREN</small></div></div>
+            <div class="omega-mission-heading"><span>◉</span><div><p>OMEGA MISSION CONTROL</p><small>PLANEN · KOORDINIEREN · AUSFÜHREN · OPTIMIEREN</small></div><button class="secondary-button training-open" id="trainingOpenButton" type="button">Cybersecurity-Übung starten</button></div>
             <div class="omega-core" aria-hidden="true"><span>Ω</span><small>OMEGA CORE<br>AKTIV</small></div>
             <div class="omega-module-list">
                 <p>SYSTEM MODULE</p>
@@ -243,6 +243,34 @@
                 <button class="send-button" value="confirm" type="submit">Freigeben</button>
             </div>
         </form>
+    </dialog>
+    <dialog class="training-dialog" id="trainingDialog" aria-labelledby="trainingTitle">
+        <div class="training-content">
+            <p class="training-eyebrow">OMEGA // CYBERSECURITY TRAINING</p>
+            <h2 id="trainingTitle">Level 1: Die Bezahlsperre</h2>
+            <p class="training-notice">Simulation: Es ist keine echte Zahlung erforderlich.</p>
+            <section id="trainingLevelOne" aria-labelledby="trainingTitle">
+                <p class="training-warning">Sie müssen bezahlen, um fortzufahren.</p>
+                <p>Untersuchen Sie den deaktivierten Weiter-Button mit den Browser-Entwicklertools und aktivieren Sie ihn.</p>
+                <div class="preferences-actions">
+                    <button class="secondary-button" id="trainingCancelButton" type="button">Abbrechen</button>
+                    <button class="send-button" id="trainingNextButton" type="button" disabled>Weiter</button>
+                </div>
+            </section>
+            <section id="trainingLevelTwo" aria-labelledby="trainingLevelTwoTitle" hidden>
+                <h3 id="trainingLevelTwoTitle" tabindex="-1">Level 2: Sicherheit verstehen</h3>
+                <p>Warum schützt ein deaktivierter Button allein keine echte Bezahlfunktion?</p>
+                <div class="training-answers">
+                    <button class="secondary-button" type="button" data-training-answer="wrong">Weil der Button die falsche Farbe hat.</button>
+                    <button class="secondary-button" type="button" data-training-answer="correct">Weil Änderungen im Browser möglich sind und der Server die Zahlung prüfen muss.</button>
+                    <button class="secondary-button" type="button" data-training-answer="wrong">Weil jede Webseite immer kostenlos ist.</button>
+                </div>
+                <p class="training-feedback" id="trainingFeedback" role="status"></p>
+                <div class="preferences-actions">
+                    <button class="secondary-button" id="trainingCloseButton" type="button">Schließen</button>
+                </div>
+            </section>
+        </div>
     </dialog>
 </body>
 </html>

@@ -45,6 +45,13 @@ const securityCameraStatus = document.querySelector("#securityCameraStatus");
 const securityOutput = document.querySelector("#securityOutput");
 const securityForm = document.querySelector("#securityForm");
 const securityInput = document.querySelector("#securityInput");
+const trainingOpenButton = document.querySelector("#trainingOpenButton");
+const trainingDialog = document.querySelector("#trainingDialog");
+const trainingTitle = document.querySelector("#trainingTitle");
+const trainingLevelOne = document.querySelector("#trainingLevelOne");
+const trainingLevelTwo = document.querySelector("#trainingLevelTwo");
+const trainingNextButton = document.querySelector("#trainingNextButton");
+const trainingFeedback = document.querySelector("#trainingFeedback");
 const desktopUrl = "http://127.0.0.1:51827";
 
 let notes = JSON.parse(localStorage.getItem("jarvis-notes") || "[]");
@@ -141,7 +148,10 @@ function setGhostProtocol(enabled) {
 function setOmegaProtocol(enabled) {
   omegaProtocol = enabled;
   document.body.classList.toggle("omega-protocol", enabled);
-  if (!enabled) securityTerminal.hidden = true;
+  if (!enabled) {
+    securityTerminal.hidden = true;
+    if (trainingDialog.open) trainingDialog.close();
+  }
   if (enabled) {
     stopWakeListener();
     setInterfaceMode("text");
@@ -1015,6 +1025,32 @@ securityForm.addEventListener("submit", (event) => {
   const response = securityCommand(command);
   securityOutput.textContent = response || "Unbekannter Befehl. Beispiele stehen über der Eingabe.";
   securityInput.value = "";
+});
+
+trainingOpenButton.addEventListener("click", () => {
+  if (!omegaProtocol || trainingDialog.open) return;
+  trainingTitle.textContent = "Level 1: Die Bezahlsperre";
+  trainingLevelOne.hidden = false;
+  trainingLevelTwo.hidden = true;
+  trainingNextButton.disabled = true;
+  trainingFeedback.textContent = "";
+  trainingDialog.showModal();
+});
+document.querySelector("#trainingCancelButton").addEventListener("click", () => trainingDialog.close());
+document.querySelector("#trainingCloseButton").addEventListener("click", () => trainingDialog.close());
+trainingNextButton.addEventListener("click", () => {
+  if (!omegaProtocol || trainingNextButton.disabled) return;
+  trainingLevelOne.hidden = true;
+  trainingLevelTwo.hidden = false;
+  trainingTitle.textContent = "Level 2 erreicht";
+  document.querySelector("#trainingLevelTwoTitle").focus();
+});
+document.querySelectorAll("[data-training-answer]").forEach((button) => {
+  button.addEventListener("click", () => {
+    trainingFeedback.textContent = button.dataset.trainingAnswer === "correct"
+      ? "Richtig! Eine echte Zahlungsprüfung muss auf dem Server stattfinden."
+      : "Noch nicht richtig. Überlegen Sie, was Sie gerade im Browser verändert haben.";
+  });
 });
 
 if ("speechSynthesis" in window) {
