@@ -13,6 +13,20 @@ let animationFrame;
 let lastVideoTime = -1;
 let lastDetection;
 let personDetections = [];
+let cameraBlocked = false;
+let cameraStarting = false;
+let cameraGeneration = 0;
+
+function getCameraStatus() {
+  return cameraBlocked
+    ? (cameraStarting ? "Gesperrt – Startvorgang ausstehend" : "Gesperrt")
+    : (mediaStream ? "Aktiv" : cameraStarting ? "Wird gestartet" : "Inaktiv");
+}
+
+function updateCameraStatus() {
+  cameraButton.disabled = cameraBlocked || cameraStarting;
+  window.dispatchEvent(new CustomEvent("jarvis-camera-status", { detail: getCameraStatus() }));
+}
 
 const germanLabels = {
   airplane: "ein Flugzeug", backpack: "einen Rucksack", banana: "eine Banane", baseball_bat: "einen Baseballschläger",
@@ -96,6 +110,7 @@ async function detectObjects() {
 }
 
 function stopCamera() {
+  cameraGeneration += 1;
   cancelAnimationFrame(animationFrame);
   mediaStream?.getTracks().forEach((track) => track.stop());
   mediaStream = undefined;
@@ -105,29 +120,51 @@ function stopCamera() {
   personDetections = [];
   cameraView.classList.remove("active");
   cameraButton.textContent = "Kamera starten";
-  visionState.textContent = "Bereit";
+  visionState.textContent = cameraBlocked ? "Kamera für Jarvis gesperrt" : "Bereit";
+  updateCameraStatus();
 }
 
 async function startCamera() {
+  if (cameraBlocked || cameraStarting) return;
   if (!navigator.mediaDevices?.getUserMedia) {
     visionState.textContent = "Kamera nicht verfügbar";
     return;
   }
 
-  cameraButton.disabled = true;
+  cameraStarting = true;
+  const generation = ++cameraGeneration;
+  updateCameraStatus();
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
+    if (generation !== cameraGeneration || cameraBlocked) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    mediaStream = stream;
+    stream.getVideoTracks().forEach((track) => {
+      track.addEventListener("ended", () => {
+        if (mediaStream === stream) {
+          stopCamera();
+          visionState.textContent = "Kameraverbindung beendet";
+        }
+      });
+    });
     cameraFeed.srcObject = mediaStream;
+    updateCameraStatus();
     await cameraFeed.play();
+    if (generation !== cameraGeneration || cameraBlocked) return;
     cameraView.classList.add("active");
     cameraButton.textContent = "Kamera stoppen";
+    updateCameraStatus();
     await getDetector();
+    if (generation !== cameraGeneration || cameraBlocked) return;
     lastVideoTime = -1;
     detectObjects();
   } catch (error) {
+    if (generation !== cameraGeneration || cameraBlocked) return;
     if (mediaStream) {
       visionState.textContent = "Kamera aktiv, Objekterkennung konnte nicht geladen werden";
       console.error("Objekterkennung konnte nicht geladen werden.", error);
@@ -146,7 +183,8 @@ async function startCamera() {
     visionState.textContent = errorMessages[error.name] || `Kamera-Fehler: ${error.name || "unbekannt"}`;
     console.error("Kamera oder Objekterkennung konnte nicht gestartet werden.", error);
   } finally {
-    cameraButton.disabled = false;
+    cameraStarting = false;
+    updateCameraStatus();
   }
 }
 
@@ -161,6 +199,16 @@ cameraButton.addEventListener("click", () => {
 window.addEventListener("beforeunload", stopCamera);
 
 window.jarvisObjectVision = {
+  setBlocked(blocked) {
+    cameraBlocked = blocked;
+    if (blocked) {
+      stopCamera();
+    } else {
+      visionState.textContent = "Bereit";
+      updateCameraStatus();
+    }
+  },
+  getStatus: getCameraStatus,
   capture() {
     if (!mediaStream || !cameraFeed.videoWidth || !cameraFeed.videoHeight) return null;
     const captureCanvas = document.createElement("canvas");
@@ -186,3 +234,4 @@ window.jarvisObjectVision = {
     return `Ich erkenne wahrscheinlich ${object}.`;
   },
 };
+updateCameraStatus();

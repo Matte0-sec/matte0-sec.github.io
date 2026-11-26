@@ -36,6 +36,7 @@
             <button type="button" data-command="Programmiermodus: ">Projekte</button>
             <button type="button" data-command="Notiz: ">Notizen</button>
             <button type="button" data-command="Öffne Dateien">Dateien</button>
+            <button type="button" id="securityOpenButton">Security Terminal</button>
             <button type="button" data-command="Was kannst du?">Tools</button>
         </aside>
         <header class="topbar">
@@ -107,6 +108,30 @@
                     <a id="scienceRepositoryLink" href="https://github.com/Matte0-sec/Naturwissenschaften" target="_blank" rel="noopener">Repository</a>
                 </div>
             </article>
+        </section>
+
+        <section class="security-terminal" id="securityTerminal" aria-labelledby="securityTitle" hidden>
+            <div class="security-heading">
+                <div>
+                    <p class="eyebrow">OMEGA SECURITY // LOKALE SITZUNG</p>
+                    <h2 id="securityTitle">Security Terminal</h2>
+                </div>
+                <button class="secondary-button" id="securityCloseButton" type="button">Schließen</button>
+            </div>
+            <p class="security-scope">Steuert nur Kamera und Mikrofon dieser Jarvis-Seite, nicht andere Apps oder Windows.</p>
+            <div class="security-status" aria-live="polite">
+                <span>MIKROFON <strong id="securityMicStatus">Wird geprüft</strong></span>
+                <span>KAMERA <strong id="securityCameraStatus">Wird geprüft</strong></span>
+            </div>
+            <p class="security-help">Befehle: „Mikrofon ausschalten“, „Kamera ausschalten“, „Mikrofon einschalten“, „Kamera einschalten“</p>
+            <p class="security-help">Nach dem Ausschalten des Mikrofons den Einschaltbefehl eintippen. Die Kamera danach bei Bedarf am Objektscanner starten.</p>
+            <p class="security-output" id="securityOutput" role="status">Terminal bereit.</p>
+            <form class="security-form" id="securityForm">
+                <label class="sr-only" for="securityInput">Security-Befehl</label>
+                <span aria-hidden="true">&gt;_</span>
+                <input id="securityInput" type="text" autocomplete="off" placeholder="Befehl eingeben ...">
+                <button class="secondary-button" type="submit">Ausführen</button>
+            </form>
         </section>
 
         <section class="vision-panel" aria-labelledby="vision-title">

@@ -37,6 +37,14 @@ const omegaCodeDialog = document.querySelector("#omegaCodeDialog");
 const omegaCodeForm = document.querySelector("#omegaCodeForm");
 const omegaCodeInput = document.querySelector("#omegaCodeInput");
 const omegaCodeError = document.querySelector("#omegaCodeError");
+const securityTerminal = document.querySelector("#securityTerminal");
+const securityOpenButton = document.querySelector("#securityOpenButton");
+const securityCloseButton = document.querySelector("#securityCloseButton");
+const securityMicStatus = document.querySelector("#securityMicStatus");
+const securityCameraStatus = document.querySelector("#securityCameraStatus");
+const securityOutput = document.querySelector("#securityOutput");
+const securityForm = document.querySelector("#securityForm");
+const securityInput = document.querySelector("#securityInput");
 const desktopUrl = "http://127.0.0.1:51827";
 
 let notes = JSON.parse(localStorage.getItem("jarvis-notes") || "[]");
@@ -51,6 +59,9 @@ let interfaceMode = "voice";
 let preferences = JSON.parse(localStorage.getItem("jarvis-preferences") || "{}");
 let ghostProtocol = sessionStorage.getItem("jarvis-ghost-protocol") === "true";
 let omegaProtocol = false;
+let microphoneBlocked = false;
+let commandRecognition;
+let commandRecognitionState = "idle";
 const omegaPasscode = "1100";
 let conversationHistory;
 
@@ -123,13 +134,14 @@ function setGhostProtocol(enabled) {
   speechSynthesis.cancel();
   stopWakeListener();
   setInterfaceMode("text");
-  wakeScreen.classList.toggle("awake", enabled);
+  wakeScreen.classList.toggle("awake", enabled || microphoneBlocked);
   promptInput.focus();
 }
 
 function setOmegaProtocol(enabled) {
   omegaProtocol = enabled;
   document.body.classList.toggle("omega-protocol", enabled);
+  if (!enabled) securityTerminal.hidden = true;
   if (enabled) {
     stopWakeListener();
     setInterfaceMode("text");
@@ -145,7 +157,7 @@ function isGhostProtocolCommand(command) {
 }
 
 function startWakeListener() {
-  if (ghostProtocol || wakeRecognitionActive) return;
+  if (microphoneBlocked || ghostProtocol || wakeRecognitionActive) return;
   const WakeRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!WakeRecognition) {
     wakeStatus.textContent = "Sprachstart wird von diesem Browser nicht unterstützt";
@@ -596,12 +608,75 @@ function getDesktopApp(command) {
   return apps.find((app) => app.pattern.test(command));
 }
 
+function updateSecurityMicrophone() {
+  if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+    securityMicStatus.textContent = "Spracherkennung nicht verfügbar";
+  } else if (commandRecognitionState !== "idle") {
+    securityMicStatus.textContent = microphoneBlocked ? "Gesperrt – wird beendet" : "Aktiv / wird gestartet";
+  } else {
+    securityMicStatus.textContent = microphoneBlocked ? "Gesperrt" : "Inaktiv";
+  }
+  micButton.disabled = microphoneBlocked || !commandRecognition;
+  jarvisOrb.disabled = microphoneBlocked || !commandRecognition;
+}
+
+function openSecurityTerminal() {
+  securityTerminal.hidden = false;
+  securityCameraStatus.textContent = window.jarvisObjectVision?.getStatus() || "Kameramodul nicht verfügbar";
+  updateSecurityMicrophone();
+  securityTerminal.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function securityCommand(command) {
+  const normalized = command.trim().toLocaleLowerCase("de-DE").replace(/[.!?]+$/, "");
+  if (/^(?:security aktivieren|aktiviere security|security terminal (?:öffnen|aktivieren)|öffne security terminal)$/.test(normalized)) {
+    if (!omegaProtocol) return "Das Security Terminal ist nur im Omega Modus verfügbar.";
+    openSecurityTerminal();
+    return "Security Terminal aktiviert.";
+  }
+  if (!omegaProtocol || securityTerminal.hidden) return null;
+  const match = normalized.match(/^(?:(mikrofon|mikrophon|kamera) (ausschalten|deaktivieren|aus|einschalten|aktivieren|an)|(schalte|deaktiviere|aktiviere) (?:das |die )?(mikrofon|mikrophon|kamera)(?: (aus|ein|an))?)$/);
+  if (!match) return null;
+  const device = match[1] || match[4];
+  const action = match[2] || (match[3] === "schalte" ? match[5] : match[3]);
+  if (!action) return null;
+  const blocked = ["ausschalten", "deaktivieren", "aus", "deaktiviere"].includes(action);
+  if (device === "kamera") {
+    if (!window.jarvisObjectVision) return "Das Kameramodul ist nicht verfügbar.";
+    window.jarvisObjectVision.setBlocked(blocked);
+    return blocked
+      ? "Kamera für Jarvis gesperrt. Falls eine Browseranfrage aussteht, wird sie nach ihrer Rückgabe beendet."
+      : "Kamera für Jarvis freigegeben. Starten Sie sie bei Bedarf am Objektscanner.";
+  }
+  microphoneBlocked = blocked;
+  if (blocked) {
+    stopWakeListener();
+    if (commandRecognition && commandRecognitionState !== "idle") {
+      try {
+        commandRecognition.abort();
+      } catch (error) {
+        console.error("Spracherkennung konnte nicht beendet werden.", error);
+        updateSecurityMicrophone();
+        return "Mikrofon gesperrt, aber die Spracherkennung konnte nicht beendet werden. Bitte Browserberechtigung prüfen.";
+      }
+    }
+  }
+  updateSecurityMicrophone();
+  return blocked
+    ? "Mikrofon für Jarvis gesperrt. Zum Freigeben den Befehl eintippen."
+    : "Mikrofon für Jarvis freigegeben. Starten Sie die Spracheingabe bei Bedarf erneut.";
+}
+
 async function respond(input) {
   const command = input.trim();
   const normalized = command.toLocaleLowerCase("de-DE");
   let response;
 
-  if (/^(?:aktiviere|aktivire) ghost protocol\.?$/i.test(command)) {
+  const securityResponse = securityCommand(command);
+  if (securityResponse !== null) {
+    response = securityResponse;
+    securityOutput.textContent = response;
+  } else if (/^(?:aktiviere|aktivire) ghost protocol\.?$/i.test(command)) {
     setGhostProtocol(true);
     response = "Ghost Protocol aktiv. Textmodus aktiv; Zugriff ist auf Dateien und Webseiten begrenzt.";
   } else if (/^(?:deaktiviere|beende) ghost protocol\.?$/i.test(command)) {
@@ -874,9 +949,12 @@ document.querySelector("#clearNotes").addEventListener("click", () => {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
   const recognition = new SpeechRecognition();
+  commandRecognition = recognition;
   recognition.lang = "de-DE";
   recognition.interimResults = false;
   recognition.addEventListener("start", () => {
+    commandRecognitionState = "active";
+    updateSecurityMicrophone();
     micButton.classList.add("listening");
     voiceState.textContent = "hört zu";
     assistantStatus.textContent = "Ich höre zu ...";
@@ -886,23 +964,58 @@ if (SpeechRecognition) {
     }
   });
   recognition.addEventListener("end", () => {
+    commandRecognitionState = "idle";
+    updateSecurityMicrophone();
     micButton.classList.remove("listening");
     voiceState.textContent = "bereit";
     orbMode.classList.remove("listening");
     if (interfaceMode === "voice" && !orbMode.classList.contains("speaking")) orbStatus.textContent = "Sprachmodus bereit";
   });
   recognition.addEventListener("result", (event) => {
+    if (microphoneBlocked) return;
     const input = event.results[0][0].transcript;
     addMessage(input, "user");
     respond(input);
   });
-  micButton.addEventListener("click", () => recognition.start());
-  jarvisOrb.addEventListener("click", () => recognition.start());
+  const startCommandRecognition = () => {
+    if (microphoneBlocked || commandRecognitionState !== "idle") return;
+    try {
+      recognition.start();
+      commandRecognitionState = "starting";
+      updateSecurityMicrophone();
+    } catch (error) {
+      console.error("Spracherkennung konnte nicht gestartet werden.", error);
+      assistantStatus.textContent = "Spracherkennung konnte nicht gestartet werden. Bitte Browserberechtigung prüfen.";
+    }
+  };
+  micButton.addEventListener("click", startCommandRecognition);
+  jarvisOrb.addEventListener("click", startCommandRecognition);
 } else {
   micButton.disabled = true;
   jarvisOrb.disabled = true;
   micButton.title = "Spracheingabe wird von diesem Browser nicht unterstützt";
 }
+updateSecurityMicrophone();
+
+window.addEventListener("jarvis-camera-status", (event) => {
+  securityCameraStatus.textContent = event.detail;
+});
+securityOpenButton.addEventListener("click", () => {
+  if (!omegaProtocol) return;
+  openSecurityTerminal();
+  securityInput.focus();
+});
+securityCloseButton.addEventListener("click", () => {
+  securityTerminal.hidden = true;
+});
+securityForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const command = securityInput.value.trim();
+  if (!command || !omegaProtocol) return;
+  const response = securityCommand(command);
+  securityOutput.textContent = response || "Unbekannter Befehl. Beispiele stehen über der Eingabe.";
+  securityInput.value = "";
+});
 
 if ("speechSynthesis" in window) {
   updateVoice();
