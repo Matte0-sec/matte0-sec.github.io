@@ -50,8 +50,12 @@ const trainingDialog = document.querySelector("#trainingDialog");
 const trainingTitle = document.querySelector("#trainingTitle");
 const trainingLevelOne = document.querySelector("#trainingLevelOne");
 const trainingLevelTwo = document.querySelector("#trainingLevelTwo");
+const trainingLevelThree = document.querySelector("#trainingLevelThree");
 const trainingNextButton = document.querySelector("#trainingNextButton");
 const trainingFeedback = document.querySelector("#trainingFeedback");
+const trainingLevelThreeButton = document.querySelector("#trainingLevelThreeButton");
+const trainingExitButton = document.querySelector("#trainingExitButton");
+const trainingEscapeFeedback = document.querySelector("#trainingEscapeFeedback");
 const desktopUrl = "http://127.0.0.1:51827";
 
 let notes = JSON.parse(localStorage.getItem("jarvis-notes") || "[]");
@@ -1032,12 +1036,18 @@ trainingOpenButton.addEventListener("click", () => {
   trainingTitle.textContent = "Level 1: Die Bezahlsperre";
   trainingLevelOne.hidden = false;
   trainingLevelTwo.hidden = true;
+  trainingLevelThree.hidden = true;
   trainingNextButton.disabled = true;
+  trainingLevelThreeButton.disabled = true;
+  trainingExitButton.dataset.state = "closed";
+  trainingExitButton.disabled = false;
   trainingFeedback.textContent = "";
+  trainingEscapeFeedback.textContent = "";
   trainingDialog.showModal();
 });
 document.querySelector("#trainingCancelButton").addEventListener("click", () => trainingDialog.close());
 document.querySelector("#trainingCloseButton").addEventListener("click", () => trainingDialog.close());
+document.querySelector("#trainingEscapeCloseButton").addEventListener("click", () => trainingDialog.close());
 trainingNextButton.addEventListener("click", () => {
   if (!omegaProtocol || trainingNextButton.disabled) return;
   trainingLevelOne.hidden = true;
@@ -1047,10 +1057,24 @@ trainingNextButton.addEventListener("click", () => {
 });
 document.querySelectorAll("[data-training-answer]").forEach((button) => {
   button.addEventListener("click", () => {
-    trainingFeedback.textContent = button.dataset.trainingAnswer === "correct"
+    const correct = button.dataset.trainingAnswer === "correct";
+    trainingFeedback.textContent = correct
       ? "Richtig! Eine echte Zahlungsprüfung muss auf dem Server stattfinden."
       : "Noch nicht richtig. Überlegen Sie, was Sie gerade im Browser verändert haben.";
+    if (correct) trainingLevelThreeButton.disabled = false;
   });
+});
+trainingLevelThreeButton.addEventListener("click", () => {
+  if (!omegaProtocol || trainingLevelThreeButton.disabled) return;
+  trainingLevelTwo.hidden = true;
+  trainingLevelThree.hidden = false;
+  trainingTitle.textContent = "Level 3 erreicht";
+  document.querySelector("#trainingLevelThreeTitle").focus();
+});
+trainingExitButton.addEventListener("click", () => {
+  if (!omegaProtocol || trainingLevelThree.hidden || trainingExitButton.dataset.state !== "open") return;
+  trainingEscapeFeedback.textContent = "Geschafft! Sie haben den versteckten Ausgang gefunden und den Escape Room verlassen.";
+  trainingExitButton.disabled = true;
 });
 
 if ("speechSynthesis" in window) {
